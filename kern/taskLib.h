@@ -52,5 +52,6 @@ extern void taskInit(
 		     int        arg4 );
 
 extern void taskLibInit();
-
+extern int taskIdSelf();
+extern void taskDelay(uint32_t delay);
 #endif

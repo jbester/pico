@@ -5,9 +5,13 @@
 
 #define THREAD_RETURN 0xFFFFFFFD //Tells the handler to return using the PSP
 
-char* stack;
+static char* stack;
 tcb_t tasks[MAX_TASKS];
 int current_task = 0;
+
+int taskIdSelf() {
+  return current_task;
+}
 
 void taskLibInit() {
   int i;
@@ -38,15 +42,11 @@ void taskInit(
     int        arg2,
     int        arg3,
     int        arg4 ) {
-  
-  int len = 0;
   char *base = (char*)stackBase;
   uint32_t *sp;
 
   // copy task name to base of stack
-  do {
-    *(--base) = name++;
-  } while((*name) != 0); 
+  while((*(--base) = *name++) != 0);
 
   // align stack
   do {
@@ -101,8 +101,8 @@ int taskSpawn(char *name,
   {
     if (tasks[i].state == TASK_FREE)
     {
-    uint32_t *sp = allocateThreadStack(stackSize);
-   taskInit(&(tasks[i]), name, priority, options, sp, stackSize, entryPoint, arg1, arg2, arg3, arg4);
+      uint32_t *sp = allocateThreadStack(stackSize);
+      taskInit(&(tasks[i]), name, priority, options, sp, stackSize, entryPoint, arg1, arg2, arg3, arg4);
       return i;
     }
   }
@@ -115,6 +115,14 @@ status_t taskDelete(int tid)
   while(1);
 }
 
+extern volatile uint64_t ticks;
+
+void taskDelay(uint32_t delay) 
+{
+  // TODO interface with scheduler
+  uint64_t end = tickGet() + delay;
+  while(tickGet() < end);
+}
 
 void exit(int errorCode) 
 {

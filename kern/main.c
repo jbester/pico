@@ -1,9 +1,11 @@
 #include "arch/arm/include/stm32f4xx_conf.h"
 #include "pico.h"
 #include "taskLib.h"
+#include "tickLib.h"
 #include "config.h"
 
-volatile uint64_t ticks = 0;
+#define DISABLE_INTERRUPTS() asm volatile("mov r0, #1\nmsr PRIMASK, r0\n")
+#define ENABLE_INTERRUPTS() asm volatile("mov r0, #0\nmsr PRIMASK, r0\n")
 
  
 #define MAIN_RETURN 0xFFFFFFF9  //Tells the handler to return using the MSP
@@ -21,7 +23,6 @@ void ms_delay(int ms)
 
 
 void idle();
-void taskDelay(uint32_t);
 
 /*
   int taskSpawn(char *name, void (*fn)()) {
@@ -68,8 +69,9 @@ void led2()
 }
 
 
-
+/*
 void __attribute__ ((interrupt)) SVC_Handler(int *arg) {
+  
   asm volatile(
 	       "MOV r0, %0\n"
 	       "ldmia r0!, {r4-r11, r14}\n"
@@ -80,10 +82,10 @@ void __attribute__ ((interrupt)) SVC_Handler(int *arg) {
 	       : : "r" (tasks[current_task].sp )
 	       );
 
-  /*
+  
     int call = ((char *)arg[6])[-2];
-  */
-}
+  
+}*/
 
 void __attribute__ ((interrupt)) PendSV_Handler(void) {
   asm volatile(
@@ -95,8 +97,6 @@ void __attribute__ ((interrupt)) PendSV_Handler(void) {
 
 }
 
-#define DISABLE_INTERRUPTS() asm volatile("mov r0, #1\nmsr PRIMASK, r0\n")
-#define ENABLE_INTERRUPTS() asm volatile("mov r0, #0\nmsr PRIMASK, r0\n")
 
 void schedule() {
   DISABLE_INTERRUPTS();
@@ -112,7 +112,7 @@ void schedule() {
     current_task = IDLE_TASK; // idle task
   }
 
-  if (ticks % 250 == 0) {
+  if (tickGet() % 250 == 0) {
     GPIOD->ODR ^= (1 << 15);           
 
   }
@@ -123,32 +123,27 @@ void schedule() {
 
 
 void __attribute__ ((interrupt)) SysTick_Handler(void){
+  // store current context
   asm volatile(
-	       "MRS r0, psp\n"
-	       "stmdb r0!, {r4-r11, r14}\n"
-	       "MOV %0, r0\n"
-	       : "=r" (tasks[current_task].sp )
-	       );
-
-  ticks++;
-  schedule();
+         "MRS r0, psp\n"
+         "stmdb r0!, {r4-r11, r14}\n"
+         "MOV %0, r0\n"
+         : "=r" (tasks[current_task].sp )
+         );
+  tickAnnounce();
 }
 
-void taskDelay(uint32_t delay) 
-{
-  uint64_t end = ticks + delay;
-  while(ticks < end);
-}
 
-void usrAppInit() 
+int usrAppInit() 
 {
   int i = 0;
   GPIOD->ODR ^= (1 << 13);           // Toggle the pin        
-  taskSpawn("led2", 50, 0, 1024, &led2, 0, 0, 0, 0);
+  taskSpawn("led2", 50, 0, 1024, (FUNCPTR)(&led2), 0, 0, 0, 0);
   for(i = 0; i < 100; i ++) {
     taskDelay(10);
     GPIOD->ODR ^= (1 << 13);           // Toggle the pin        
   }
+  return 0;
 }
 
 static inline void spawnInitialTask() 
@@ -165,21 +160,21 @@ static inline void spawnInitialTask()
 void kernelInit() 
 {
   //  programStack = (uint32_t)mem_end - DEFAULT_STACK_SIZE;
-  ticks = 0; 
+  tickSet(0);
   taskLibInit();
   hwInit();
   // DEBUG show ON
   // set the pin
   GPIOD->ODR |= (1 << 12);           
-  taskSpawn("tIdle", 50, 0, 1024, &idle, 0, 0, 0, 0);
-  taskSpawn("tUsrAppInit", 50, 0, 1024, &usrAppInit, 0, 0, 0, 0);
+  taskSpawn("tIdle", 50, 0, 1024, (&idle), 0, 0, 0, 0);
+  taskSpawn("tUsrAppInit", 50, 0, 1024, (&usrAppInit), 0, 0, 0, 0);
   if (SysTick_Config(SystemCoreClock / 1000))
     { 
       // Capture error 
       GPIOD->ODR = 0;           // Toggle the pin          
       while(1) {
-	GPIOD->ODR ^= (1 << 15);           // Toggle the pin          
-	ms_delay(100);
+      GPIOD->ODR ^= (1 << 15);           // Toggle the pin          
+      ms_delay(100);
       }
     }
   spawnInitialTask();
@@ -193,7 +188,6 @@ void idle() {
     taskDelay(100);
     GPIOD->ODR ^= (1 << 12);           // Toggle the pin        
   }
-
   /*  while(1)
       asm volatile("nop\n");*/;
 }
