@@ -1,6 +1,8 @@
 #ifndef _PICO_H_
 #define _PICO_H_
 
+#include <stdint.h>
+
 typedef enum 
 {
 	STATUS_ERROR=0,
