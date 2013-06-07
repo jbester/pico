@@ -22,7 +22,7 @@ CFLAGS += -I$(STM_COMMON)/Libraries/STM32F4xx_StdPeriph_Driver/inc
 AFLAGS=
 LDFLAGS=
 
-OBJ := kern/main.o kern/sched.o kern/sysLib.o kern/taskLib.o arch/arm/boot_stm32f4xx.o arch/arm/system_stm32f4xx.o
+OBJ := kern/main.o kern/sysLib.o kern/taskLib.o kern/tickLib.o arch/arm/boot_stm32f4xx.o arch/arm/system_stm32f4xx.o
 
 
 .PHONY: kernel clean
